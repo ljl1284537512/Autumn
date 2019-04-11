@@ -7,6 +7,8 @@
 - [简介](#简介)
 - [性能考虑因素](#性能考虑因素)
 - [公平性](#公平性)
+	- [非公平锁实现](#非公平锁实现)
+	- [公平锁实现](#公平锁实现)
 - [锁释放](#锁释放)
 
 
@@ -48,7 +50,7 @@ public ReentrantLock(boolean fair) {
 }
 ```
 
-##### 非公平锁实现：
+##### 非公平锁实现
 
 ```java
 static final class NonfairSync extends Sync {
