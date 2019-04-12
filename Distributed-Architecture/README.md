@@ -6,3 +6,4 @@
 - Netty
 - Redis
 - Memcached
+- Nginx
