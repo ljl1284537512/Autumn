@@ -1,13 +1,13 @@
 ## Welcome to My Repository !
 
 
-[Java Core](https://github.com/ljl1284537512/Autumn/blob/master/Java-Core)
+- [Java 核心技术](https://github.com/ljl1284537512/Autumn/blob/master/Java-Core)
 
-[Computer System](https://github.com/ljl1284537512/Autumn/blob/master/Computer-System)
+- [操作系统](https://github.com/ljl1284537512/Autumn/blob/master/Computer-System)
 
-[Computer Network](https://github.com/ljl1284537512/Autumn/blob/master/Computer-Network)
+- [计算机网络](https://github.com/ljl1284537512/Autumn/blob/master/Computer-Network)
 
-[Design Pattern](https://github.com/ljl1284537512/Autumn/blob/master/Design-Pattern)
+- [设计模式](https://github.com/ljl1284537512/Autumn/blob/master/Design-Pattern)
 
 
 
