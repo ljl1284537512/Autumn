@@ -304,7 +304,102 @@ public final void acquire(int arg) {
 
 ## 锁释放
 
-那些等待队列中的线程怎么办？
+那些等待队列中的线程怎么办？ReentrantLock提供unLock来解锁
+
+```java
+public void unlock() {
+    sync.release(1);
+}
+```
+
+release方法依然由AQS实现，同样采用模板方法模式；
+
+```java
+public final boolean release(int arg) {
+    // (1)
+    if (tryRelease(arg)) {
+        Node h = head;
+        if (h != null && h.waitStatus != 0)
+            unparkSuccessor(h);
+        return true;
+    }
+    return false;
+}
+```
+
+- tryRelease主要做释放锁操作，其在Sync中完成，说明公平锁与非公平锁的释放操作是一样的。但是有一点需要说明，release操作完成之后，如果当前有线程正在等待中，则直接唤醒当前正在阻塞的队列的头节点线程，也就是等待最久的线程；
+
+```java
+protected final boolean tryRelease(int releases) {
+    int c = getState() - releases;
+    if (Thread.currentThread() != getExclusiveOwnerThread())
+        throw new IllegalMonitorStateException();
+    boolean free = false;
+    if (c == 0) {
+        free = true;
+        setExclusiveOwnerThread(null);
+    }
+    setState(c);
+    return free;
+}
+```
+
+- tryRelease操作仅仅释放了锁，但是没有对当前等待获取锁的线程做唤醒，而这个操作留在了unparkSuccessor中实现
+
+```java
+private void unparkSuccessor(Node node) {
+    /*
+     * If status is negative (i.e., possibly needing signal) try
+     * to clear in anticipation of signalling.  It is OK if this
+     * fails or if status is changed by waiting thread.
+     */
+    int ws = node.waitStatus;
+    if (ws < 0)
+        compareAndSetWaitStatus(node, ws, 0);
+
+    /*
+     * Thread to unpark is held in successor, which is normally
+     * just the next node.  But if cancelled or apparently null,
+     * traverse backwards from tail to find the actual
+     * non-cancelled successor.
+     */
+    Node s = node.next;
+    if (s == null || s.waitStatus > 0) {
+        s = null;
+        for (Node t = tail; t != null && t != node; t = t.prev)
+            if (t.waitStatus <= 0)
+                s = t;
+    }
+    if (s != null)
+        LockSupport.unpark(s.thread);
+}
+```
+
+- 一般情况下，需要唤醒的等待线程就是下一个节点，但是如果下一个节点被取消了，则从队列的尾部往前遍历，一致找到**未被取消的，最靠前的**一个节点，对其进行unpark操作；
+
+
+
+## 总结
+
+ReentrantLock 主要使用了Sync 下的 FairLock 以及 NonFairLock ，AQS下的tryAcquire以及tryRelease方法； 其获取锁的基本原理是对其所持有的状态值进行变更，如变更成功则代表获取锁成功，反之，则失败；相对的，释放锁，也就是对原状态值进行递减，直到状态值为0代表释放锁成功；ReentrantLock 完成重入操作也主要依靠其内部维护的State状态值，如果ReentrantLock对当前已获取的锁做二次重入，则只需要在当前State值做递增即可，同样的，退出重入锁，只需要对State值做递减即可。
+
+公平锁与非公平锁的区分是：公平锁在尝试获取锁时，首先校验等待当前锁的队列是否有线程已经在等待，则直接返回获取锁失败，反之尝试占有锁。而非公平锁每次在尝试获取锁时，无需关注当前锁队列是否已经有线程处于等待的状态，而是直接尝试获取锁，如果获取失败，才尝试加入队列中等待。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
