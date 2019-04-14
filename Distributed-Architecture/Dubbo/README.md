@@ -40,7 +40,7 @@ Dubbo 配置 - properties & 属性加载顺序
 
 Zookeeper宕机于Dubbo直连
 
-Java SPI
+[Java SPI](https://github.com/ljl1284537512/Autumn/blob/master/Distributed-Architecture/Dubbo/Java%20SPI.md)
 
 Dubbo SPI
 
