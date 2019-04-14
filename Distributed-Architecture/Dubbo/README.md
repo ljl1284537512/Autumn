@@ -40,6 +40,8 @@ Dubbo 配置 - properties & 属性加载顺序
 
 Zookeeper宕机于Dubbo直连
 
+Java SPI
+
 Dubbo SPI
 
 负载均衡
