@@ -121,8 +121,19 @@ public abstract class DateFormat extends Format {
 ```
 
 如上所述代码，假设有A, 和B两个线程同时进行parse操作，那么当A完成 （一）和（二）步骤之后，正准备执行（三）返回，这个时候B线程获取到CPU的执行时间片，并且执行完第（一）步骤，CPU继续执行A线程，那么A拿到的cal就是B clear之后的，之后的操作无疑就很多问题了。
-
-
+如下是clear()方法的实现，其内部操作了多个Calendar的状态数据：
+```java
+    public final void clear()
+    {
+        for (int i = 0; i < fields.length; ) {
+            stamp[i] = fields[i] = 0; // UNSET == 0
+            isSet[i++] = false;
+        }
+        areAllFieldsSet = areFieldsSet = false;
+        isTimeSet = false;
+    }
+```
+以上stamp，isSet等变量都是Calendar全局变量;
 
 #### 如何解决
 
