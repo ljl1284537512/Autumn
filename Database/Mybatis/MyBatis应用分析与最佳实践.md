@@ -196,7 +196,8 @@ RowBounds内置offset和limit属性，查询的时候，可以指定offset和lim
 - 对Mapper中的SQL语句进行limit拼接（需要在Java代码中计算页数，以及条数）；
 - 使用PageHelper等其他插件自动生成物理翻页的sql语句；
 
-> 如果字段发生了变化，怎么办？
+#### 通用Mapper的引入
+如果字段发生了变化，怎么办？
 解决思路：
 1). 继承(Mapper.xml也支持继承)，但是继承会导致类和Mapper.xml都急剧增多。
 2). 通用Mapper(tk mybatis)；
