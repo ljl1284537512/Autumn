@@ -247,11 +247,30 @@ doExportUrlsFor1Protocol方法实现如下：
 
 ```java
 // protocol = Protocol$Adaptive
-// protocol.export内部实现为：                    //ExtensionLoader.getExtensionLoader(Protocol.class).getExtension("registry")
+// protocol.export内部实现为：                    
+// ExtensionLoader.getExtensionLoader(Protocol.class).getExtension("registry")
+// 为什么是registry? wrapperInvoker里面的url中携带了“registry”
 Exporter<?> exporter = protocol.export(wrapperInvoker);
+// 那最终调用的是：ExtensionLoader.getExtensionLoader(Protocol.class).getExtension("registry")
 ```
 
-所以最终调用的是RegistryProtocol.export方法：
+
+
+> 获取指定扩展点与获取自适应扩展的点的区别是：
+>
+> - 自适应扩展点 ：暂时不知道用哪个扩展点，但是可以根据实际情况去动态匹配；
+>
+> - 指定扩展点：dubbo-spi指定的配置文件中, 每一行前面都有对应的指定扩展点名称，如以下；
+>
+>   dubbo=com……DubboPrototoc
+>
+>   Registry=com…..RegistryProtocol
+>
+> 那么最终获取的指定扩展点就需要根据getExtension方法中的参数，自动去匹配
+
+
+
+因为指定了"regsitry"作为扩展点，所以Dubbo-spi 根据配置文件，最终匹配的是RegistryProtocol，所以最终调用的是RegistryProtocol.export方法：
 
 ```java
     @Override
@@ -265,7 +284,7 @@ Exporter<?> exporter = protocol.export(wrapperInvoker);
         overrideListeners.put(overrideSubscribeUrl, overrideSubscribeListener);
 
         providerUrl = overrideUrlWithConfig(providerUrl, overrideSubscribeListener);
-        //本地暴露
+        //本地发布=启动服务
         final ExporterChangeableWrapper<T> exporter = doLocalExport(originInvoker, providerUrl);
 
         // url to registry
@@ -306,6 +325,221 @@ doLocalExport方法内部实现如下：
         });
     }
 ```
+
+下面来分析下：
+
+```java
+protocol.export(invokerDelegete)
+```
+
+我们再看这个protocol在registryProtocol中的定义：
+
+```java
+public class RegistryProtocol implements Protocol {
+    ...
+    private Cluster cluster;
+    
+    private Protocol protocol;
+    public void setProtocol(Protocol protocol) {
+        this.protocol = protocol;
+    }
+    
+    private RegistryFactory registryFactory;
+    private ProxyFactory proxyFactory;
+}
+```
+
+发现一个重要的信息，这个protocol是通过set注入进去的。
+
+> ….
+
+![Dubbo-Service-Publish_1.jpg](Dubbo-Service-Publish_1.jpg)
+
+
+
+最终调用DubboProtocol中的export方法
+
+```java
+    @Override
+    public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
+      	// 获取Url地址
+        URL url = invoker.getUrl();
+
+        // export service.
+        String key = serviceKey(url);
+        DubboExporter<T> exporter = new DubboExporter<T>(invoker, key, exporterMap);
+        exporterMap.put(key, exporter);
+
+        //export an stub service for dispatching event
+        Boolean isStubSupportEvent = url.getParameter(Constants.STUB_EVENT_KEY, Constants.DEFAULT_STUB_EVENT);
+        Boolean isCallbackservice = url.getParameter(Constants.IS_CALLBACK_SERVICE, false);
+        if (isStubSupportEvent && !isCallbackservice) {
+            String stubServiceMethods = url.getParameter(Constants.STUB_EVENT_METHODS_KEY);
+            if (stubServiceMethods == null || stubServiceMethods.length() == 0) {
+                if (logger.isWarnEnabled()) {
+                    logger.warn(new IllegalStateException("consumer [" + url.getParameter(Constants.INTERFACE_KEY) +
+                            "], has set stubproxy support event ,but no stub methods founded."));
+                }
+
+            } else {
+                stubServiceMethodsMap.put(url.getServiceKey(), stubServiceMethods);
+            }
+        }
+
+        openServer(url);
+        optimizeSerialization(url);
+
+        return exporter;
+    }
+```
+
+先看openServer(url)的实现：
+
+```java
+    private void openServer(URL url) {
+        // find server.
+        String key = url.getAddress();
+        //client can export a service which's only for server to invoke
+        boolean isServer = url.getParameter(Constants.IS_SERVER_KEY, true);
+        if (isServer) {
+            ExchangeServer server = serverMap.get(key);
+            if (server == null) {
+                synchronized (this) {
+                    server = serverMap.get(key);
+                    if (server == null) {
+                      	// 如果key对应的server不存在，则创建server
+                        serverMap.put(key, createServer(url));
+                    }
+                }
+            } else {
+                // server supports reset, use together with override
+                server.reset(url);
+            }
+        }
+    }
+```
+
+createServer实现:
+
+```java
+    private ExchangeServer createServer(URL url) {
+        
+      
+      url = URLBuilder.from(url)
+                // send readonly event when server closes, it's enabled by default
+                .addParameterIfAbsent(Constants.CHANNEL_READONLYEVENT_SENT_KEY, Boolean.TRUE.toString())
+                // enable heartbeat by default
+                .addParameterIfAbsent(Constants.HEARTBEAT_KEY, String.valueOf(Constants.DEFAULT_HEARTBEAT))
+                .addParameter(Constants.CODEC_KEY, DubboCodec.NAME)
+                .build();
+        String str = url.getParameter(Constants.SERVER_KEY, Constants.DEFAULT_REMOTING_SERVER);
+
+      
+      
+      
+        if (str != null && str.length() > 0 && !ExtensionLoader.getExtensionLoader(Transporter.class).hasExtension(str)) {
+            throw new RpcException("Unsupported server type: " + str + ", url: " + url);
+        }
+
+      	// 绑定服务
+        ExchangeServer server;
+        try {
+            server = Exchangers.bind(url, requestHandler);
+        } catch (RemotingException e) {
+            throw new RpcException("Fail to start server(url: " + url + ") " + e.getMessage(), e);
+        }
+      
+      
+
+        str = url.getParameter(Constants.CLIENT_KEY);
+        if (str != null && str.length() > 0) {
+            Set<String> supportedTypes = ExtensionLoader.getExtensionLoader(Transporter.class).getSupportedExtensions();
+            if (!supportedTypes.contains(str)) {
+                throw new RpcException("Unsupported client type: " + str);
+            }
+        }
+
+        return server;
+    }
+```
+
+
+
+#### 注册到zookeeper
+
+注册到zk上的入口是RegistryProtocol的export方法：
+
+```java
+    @Override
+    public <T> Exporter<T> export(final Invoker<T> originInvoker) throws RpcException {
+        URL registryUrl = getRegistryUrl(originInvoker);
+        // url to export locally
+        URL providerUrl = getProviderUrl(originInvoker);
+
+        // Subscribe the override data
+        // FIXME When the provider subscribes, it will affect the scene : a certain JVM exposes the service and call
+        //  the same service. Because the subscribed is cached key with the name of the service, it causes the
+        //  subscription information to cover.
+        final URL overrideSubscribeUrl = getSubscribedOverrideUrl(providerUrl);
+        final OverrideListener overrideSubscribeListener = new OverrideListener(overrideSubscribeUrl, originInvoker);
+        overrideListeners.put(overrideSubscribeUrl, overrideSubscribeListener);
+
+        providerUrl = overrideUrlWithConfig(providerUrl, overrideSubscribeListener);
+        //export invoker
+        final ExporterChangeableWrapper<T> exporter = doLocalExport(originInvoker, providerUrl);
+
+        // url to registry
+        final Registry registry = getRegistry(originInvoker);
+        final URL registeredProviderUrl = getRegisteredProviderUrl(providerUrl, registryUrl);
+        ProviderInvokerWrapper<T> providerInvokerWrapper = ProviderConsumerRegTable.registerProvider(originInvoker,
+                registryUrl, registeredProviderUrl);
+        //to judge if we need to delay publish
+        boolean register = registeredProviderUrl.getParameter("register", true);
+        if (register) {
+            register(registryUrl, registeredProviderUrl);
+            providerInvokerWrapper.setReg(true);
+        }
+
+        // Deprecated! Subscribe to override rules in 2.6.x or before.
+        registry.subscribe(overrideSubscribeUrl, overrideSubscribeListener);
+
+        exporter.setRegisterUrl(registeredProviderUrl);
+        exporter.setSubscribeUrl(overrideSubscribeUrl);
+        //Ensure that a new exporter instance is returned every time export
+        return new DestroyableExporter<>(exporter);
+    }
+```
+
+第一句代码比较复杂：
+
+```java
+URL registryUrl = getRegistryUrl(originInvoker);
+```
+
+内部实现如下：
+
+```JAVA
+    private URL getRegistryUrl(Invoker<?> originInvoker) {
+      	// registry://...
+        URL registryUrl = originInvoker.getUrl();
+      	// 将registry->zookeeper://...改协议头
+        if (REGISTRY_PROTOCOL.equals(registryUrl.getProtocol())) {
+            String protocol = registryUrl.getParameter(REGISTRY_KEY, DEFAULT_DIRECTORY);
+            registryUrl = registryUrl.setProtocol(protocol).removeParameter(REGISTRY_KEY);
+        }
+        return registryUrl;
+    }
+```
+
+
+
+
+
+
+
+
+
+
 
 
 
