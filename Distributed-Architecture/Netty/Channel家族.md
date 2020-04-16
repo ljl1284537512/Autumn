@@ -42,7 +42,7 @@ public interface ChannelHandler {
 
 ### ChannelInboundHandler接口
 `ChannelInboundHandler`处理入站数据以及各种状态变化，它内部提供了ChannelInboundHandler的生命周期方法，这些方法将会在数据被接收或者与其对应的Channel状态发生改变时被调用。
-![](_v_images/20191103230957437_27735.png =700x)
+![](_v_images/20191103230957437_27735.png)
 `ChannelInboundHandler`的实现类如果重写了`channelRead`方法，则需要手动释放与池化的ByteBuf实例相关的内存。但是可以直接选择使用`SimpleChannelInboundHandler`类, 因为该类会自动释放资源。
 ```java
 io.netty.channel.SimpleChannelInboundHandler#channelRead
